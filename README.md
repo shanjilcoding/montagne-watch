@@ -1,36 +1,105 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Montagne Watch
 
-## Getting Started
+A public, data-dense stock dashboard for tracking the Montagne Parfums catalog. It records observed restocks, sellouts, availability periods, quantities, and price changes without presenting the catalog like a traditional storefront.
 
-First, run the development server:
+**Live demo:** https://montagne-watch.vercel.app
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+![Montagne Watch catalog table](docs/images/catalog-desktop.png)
+
+## What it tracks
+
+- Current availability across the full catalog
+- Observed quantity and last successful check
+- Restock and sold-out events
+- Current, previous, and average in-stock durations
+- Price changes, new products, and removals
+- Product-level event and availability history
+- Browser-local watchlists without user accounts
+
+On desktop, the catalog uses a sortable operational table. On mobile, every row becomes a compact information panel so all fields remain readable without horizontal scrolling.
+
+## Architecture
+
+```text
+Montagne catalog HTML
+        ↓
+Python monitor (persistent polling)
+        ↓
+SQLite event + availability history
+        ↓
+Token-protected read API
+        ↓
+Next.js server-side proxy
+        ↓
+Public Vercel dashboard
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+The monitor runs separately from Vercel because continuous polling and durable state do not belong inside request-oriented serverless functions. The browser never receives the backend API token.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Reliability choices
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- The first run creates a silent baseline instead of generating false restock events.
+- Failed, blocked, or incomplete catalog responses preserve the last known state.
+- Individual product pages provide quantity enrichment without creating fake restocks.
+- Quantity is labeled **observed quantity** because it is a snapshot, not guaranteed warehouse inventory.
+- Availability statistics only become authoritative after monitoring has observed real transitions.
 
-## Learn More
+## Local development
 
-To learn more about Next.js, take a look at the following resources:
+### Requirements
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- Node.js 20+
+- Python 3.11+
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### Configure
 
-## Deploy on Vercel
+```bash
+cp .env.example .env
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Generate a long random token and use the same value for `MONTAGNE_API_TOKEN` and `MONTAGNE_BACKEND_TOKEN`.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### Start the monitor and API
+
+```bash
+python monitor/run.py
+```
+
+### Start the dashboard
+
+```bash
+npm install
+npm run dev
+```
+
+Open `http://localhost:3000`.
+
+## Verification
+
+```bash
+# Frontend
+npm test
+npm run lint
+npm run build
+
+# Monitor and API
+cd monitor
+PYTHONPATH=. python -m unittest discover -s tests -v
+```
+
+## Main technologies
+
+- Next.js, React, TypeScript
+- Python standard library HTTP service
+- SQLite with WAL mode
+- Vitest and Python `unittest`
+- Vercel for the public dashboard
+- PM2 and Caddy for the persistent monitor/API deployment
+
+## Disclaimer
+
+This is an independent tracking project and is not affiliated with or endorsed by Montagne Parfums. Availability, quantity, and price data may change between checks and should be verified on the retailer's website before purchasing.
+
+## License
+
+MIT
